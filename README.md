@@ -9,7 +9,7 @@ WebGPU Forward+ and Clustered Deferred Shading
 
 ### Live Demo
 
-**[ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)** (needs a WebGPU-capable browser such as Chrome)
+**[Live Demo](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)** 
 
 [![](img/screenshot.png)](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)
 
