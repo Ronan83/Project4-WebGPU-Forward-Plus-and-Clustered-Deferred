@@ -4,19 +4,24 @@ WebGPU Forward+ and Clustered Deferred Shading
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 4**
 
 * Xuan Zhu
-* Tested on: **Google Chrome** on Windows 11, AMD Ryzen AI 7 350, 32 GB DDR5, NVIDIA GeForce RTX 5070 Laptop GPU (personal laptop)
+* Tested on: **Google Chrome 155** on Windows 11, AMD Ryzen AI 7 350, 32 GB DDR5, NVIDIA GeForce RTX 5070 Laptop GPU (personal laptop)
 * All measurements at a **2560 × 1347** canvas, light radius 2, initial camera position.
 
 ### Live Demo
 
-[![](img/screenshot.png)](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)
+**[ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)** (needs a WebGPU-capable browser such as Chrome)
 
-https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred
+[![](img/screenshot.png)](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)
 
 ### Demo Video/GIF
 
-<!-- TODO: replace with the recorded demo (30+ s, showing naive, Forward+ and Clustered Deferred) -->
-[Demo video](img/demo.mp4)
+**[Full demo video (39 s, MP4)](img/demo.mp4)**: Naive → Forward+ (500 → 3000 lights) → Clustered Deferred (3000 → 5000 lights, camera moving) → Forward+ at 5000 → Naive at 5000 (about 1 s per frame). Recorded straight from the WebGPU canvas on the RTX 5070.
+
+![Demo GIF](img/demo.gif)
+
+*20-second excerpt of the video above.*
+
+**Contents:** [Overview](#overview) · [Features](#features) · [Performance Analysis](#performance-analysis) · [Optimizations](#optimization-1-end-the-depth-slicing-at-the-scenes-depth) · [Deployment note](#deployment-note-constants-stripped-by-the-production-bundler)
 
 ## Overview
 
@@ -29,8 +34,6 @@ This project implements two renderers that avoid that waste by **clustering ligh
 | **Naive** | one forward pass, loops over all lights |
 | **Forward+** | light-clustering compute pass → forward pass that loops only over the fragment's cluster |
 | **Clustered Deferred** | light-clustering compute pass → G-buffer pass (position, normal, albedo) → fullscreen lighting pass that loops only over the pixel's cluster |
-
-![](img/screenshot.png)
 
 ## Features
 
@@ -124,6 +127,14 @@ Finer tiles mean shorter light lists per cluster, which makes shading cheaper. H
 * **Skip empty clusters:** a depth prepass can mark which clusters actually contain geometry, so only those are clustered. This would also give Forward+ overdraw-free shading.
 * **Smaller G-buffer:** pack octahedral normals and albedo into one `vec4u`, and reconstruct position from depth instead of storing it. This would cut the 20 bytes/pixel substantially and reduce deferred's fixed cost at low light counts.
 * **Compute-shader lighting pass** for deferred, and **render bundles** to cut CPU draw-call overhead.
+
+### Deployment note: constants stripped by the production bundler
+
+The first GitHub Pages build rendered a completely black screen in every mode, even though `npm run dev` worked. Diffing the bundle showed why: the shader constants object (`constants` in `shaders.ts`) had lost `lightRadius` and `clusterFar`. Those two keys are only read inside the `eval()`'d shader template strings, so Rollup's property tree-shaking treated them as unused and removed them. The shaders then contained `undefined` and failed to compile. The dev server doesn't tree-shake, so the bug only appears in production. The fix is one line in `shaders.ts`, which makes the object escape so every key is kept:
+
+```ts
+(globalThis as any).__shaderConstants = constants;
+```
 
 ### Credits
 
