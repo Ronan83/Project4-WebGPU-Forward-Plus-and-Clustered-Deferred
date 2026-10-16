@@ -30,6 +30,13 @@ export const constants = {
 
     moveLightsWorkgroupSize: 128,
 
+    clusterX: 32,
+    clusterY: 18,
+    clusterZ: 24,
+    maxLightsPerCluster: 512,
+    clusterFar: 50, // depth where the exponential Z slicing ends (last slice extends to the camera far plane)
+    clusteringWorkgroupSize: 64,
+
     lightRadius: 2
 };
 

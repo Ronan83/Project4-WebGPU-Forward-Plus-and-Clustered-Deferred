@@ -10,10 +10,32 @@ struct LightSet {
     lights: array<Light>
 }
 
-// TODO-2: you may want to create a ClusterSet struct similar to LightSet
+struct Cluster {
+    numLights: u32,
+    lightIndices: array<u32, ${maxLightsPerCluster}>
+}
+
+struct ClusterSet {
+    clusters: array<Cluster>
+}
 
 struct CameraUniforms {
-    viewProjMat: mat4x4f
+    viewProjMat: mat4x4f,
+    viewMat: mat4x4f,
+    invProjMat: mat4x4f,
+    screenSize: vec2f,
+    near: f32,
+    far: f32
+}
+
+fn clusterIndex(c: vec3u) -> u32 {
+    return c.x + c.y * ${clusterX} + c.z * ${clusterX} * ${clusterY};
+}
+
+// view-space depth (positive) -> exponential Z slice
+fn zSliceFromDepth(depth: f32, near: f32, far: f32) -> u32 {
+    let s = log(depth / near) / log(far / near) * f32(${clusterZ});
+    return u32(clamp(s, 0.0, f32(${clusterZ} - 1)));
 }
 
 // CHECKITOUT: this special attenuation function ensures lights don't affect geometry outside the maximum light radius

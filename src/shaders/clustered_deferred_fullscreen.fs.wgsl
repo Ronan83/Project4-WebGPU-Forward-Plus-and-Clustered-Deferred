@@ -20,7 +20,7 @@ fn main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f
     // same cluster lookup as Forward+
     let tile = vec2u(fragPos.xy / camera.screenSize * vec2f(${clusterX}, ${clusterY}));
     let depth = -(camera.viewMat * vec4f(pos, 1.0)).z;
-    let cz = zSliceFromDepth(depth, camera.near, camera.far);
+    let cz = zSliceFromDepth(depth, camera.near, f32(${clusterFar}));
     let c = vec3u(min(tile.x, ${clusterX} - 1u), min(tile.y, ${clusterY} - 1u), cz);
     let cluster = &clusterSet.clusters[clusterIndex(c)];
 
