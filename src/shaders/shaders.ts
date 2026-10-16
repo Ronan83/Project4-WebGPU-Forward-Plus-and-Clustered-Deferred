@@ -42,6 +42,10 @@ export const constants = {
 
 // =================================
 
+// Keep every key: most constants are only read inside the eval()'d shader strings below,
+// so the production bundler would otherwise tree-shake them away (e.g. lightRadius -> undefined).
+(globalThis as any).__shaderConstants = constants;
+
 function evalShaderRaw(raw: string) {
     return eval('`' + raw.replaceAll('${', '${constants.') + '`');
 }
