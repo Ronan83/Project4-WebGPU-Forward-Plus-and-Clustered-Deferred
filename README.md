@@ -140,10 +140,6 @@ The best case is a scene with a lot of overdraw and expensive lighting, like thi
 * Shrink the G-buffer: pack the normal into fewer bits, and rebuild the position from the depth buffer instead of storing it. That would cut down deferred's fixed cost.
 * Do the deferred lighting in a compute pass, and try render bundles to reduce CPU overhead from draw calls.
 
-### A bug I ran into when deploying
-
-The first GitHub Pages build was completely black in every mode, even though everything worked with `npm run dev`. After comparing the bundles, I found that the production build had removed two of the shader constants, the light radius and the cluster depth limit. Those values are only used inside the shader source strings, so the bundler thought nobody used them and deleted them. The shaders then failed to compile. The dev server doesn't do that kind of optimization, which is why it only broke in production. I fixed it with a one-line change in `shaders.ts` so the bundler keeps the whole constants object.
-
 ### Credits
 
 - [Vite](https://vitejs.dev/)
