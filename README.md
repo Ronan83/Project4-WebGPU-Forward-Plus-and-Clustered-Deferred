@@ -8,7 +8,7 @@ WebGPU Forward+ and Clustered Deferred Shading
 
 ### Live Demo
 
-[ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred) (you need a browser with WebGPU, I used Chrome)
+[Live Demo](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)
 
 [![](img/screenshot.png)](https://ronan83.github.io/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred)
 
@@ -42,6 +42,10 @@ When shading, a fragment works out which cluster it's in from its screen positio
 ### Forward+
 
 This is basically the naive renderer with one change: the fragment shader reads the light list from its cluster instead of looping over everything. It reuses the naive vertex shader.
+
+### Forward+ with depth prepass (extra credit)
+
+An optional mode, **forward+ prepass** in the GUI. It first draws the scene depth-only, then runs the normal Forward+ pass with the depth test set to "equal" and depth writes turned off, so every pixel is only lit once, for the surface that is actually visible. See [the results below](#extra-credit-depth-prepass).
 
 ### Clustered Deferred
 
@@ -110,10 +114,29 @@ I also tried different numbers of screen tiles, keeping 24 depth slices and the 
 
 Smaller tiles mean fewer lights per cluster, so shading gets cheaper. But the clustering pass tests every light against every cluster. At 64 x 36 x 24 that's about 55,000 clusters times 5000 lights every frame, and the compute pass starts to become the bottleneck. Going too coarse (8 x 5) is bad in the other direction: clusters get big, and with a lot of lights some could go over the 512-light limit and drop lights. 32 x 18 was the best balance overall, so that's what I kept. These were separate runs, so the numbers don't exactly match the main table.
 
+### Extra credit: depth prepass
+
+My analysis above said Forward+ loses to deferred mostly because of overdraw, so I added a depth prepass to test that. The first pass draws only depth, with no lighting and no color output. It still does the alpha test, because otherwise the cut-out leaves would block what's behind them. The Forward+ pass then reuses that depth buffer with an "equal" depth test and no depth writes, so the lighting only runs for the closest surface in each pixel. It's a separate mode, so I could measure both versions in the same session.
+
+| Frame time (ms) | 500 lights | 1000 | 2000 | 3000 | 5000 |
+|---|---|---|---|---|---|
+| Forward+ | 9.66 | 13.04 | 22.66 | 31.92 | 50.25 |
+| Forward+ with prepass | 4.76 | 6.05 | 8.89 | 12.25 | 18.76 |
+| Clustered Deferred | 4.77 | 6.11 | 8.86 | 11.82 | 16.89 |
+| Prepass speedup | 2.0x | 2.2x | 2.5x | 2.6x | 2.7x |
+
+![](img/perf_prepass.png)
+
+The prepass makes Forward+ 2 to 2.7 times faster, and it ends up almost exactly as fast as deferred. That backs up the overdraw explanation: once each pixel is only lit once, the two methods do about the same amount of lighting work. The speedup also grows with the light count, because more lights make each wasted fragment more expensive, while the extra depth-only pass costs the same no matter how many lights there are. At 5000 lights deferred is still about 10% faster, probably because its lighting pass runs on a fullscreen triangle where neighboring pixels share a cluster.
+
+The best case is a scene with a lot of overdraw and expensive lighting, like this one. The worst case is a scene with almost no overdraw: then the prepass just draws all the geometry a second time for nothing. The trade-off is that the vertex work doubles, but in Sponza that is cheap compared to the lighting. Unlike deferred, this keeps all the benefits of forward rendering (no G-buffer, MSAA and transparency still work), which makes it the better option if you need those.
+
+(These numbers were measured in a separate session from the main table, so Forward+ is a bit slower here.)
+
 ### What I'd do next
 
 * Make clustering cheaper: instead of testing every light against every cluster, figure out which clusters each light covers and only add it to those.
-* Add a depth prepass. It could mark which clusters actually have geometry so empty ones get skipped, and it would also remove the overdraw problem in Forward+.
+* Use the prepass depth to mark which clusters actually contain geometry, and skip the empty ones during clustering.
 * Shrink the G-buffer: pack the normal into fewer bits, and rebuild the position from the depth buffer instead of storing it. That would cut down deferred's fixed cost.
 * Do the deferred lighting in a compute pass, and try render bundles to reduce CPU overhead from draw calls.
 

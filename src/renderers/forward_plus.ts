@@ -11,8 +11,13 @@ export class ForwardPlusRenderer extends renderer.Renderer {
 
     pipeline: GPURenderPipeline;
 
-    constructor(stage: Stage) {
+    // depth prepass (extra credit): draw depth first, then shade only the visible surface
+    usePrepass: boolean;
+    prepassPipeline?: GPURenderPipeline;
+
+    constructor(stage: Stage, usePrepass = false) {
         super(stage);
+        this.usePrepass = usePrepass;
 
         this.sceneUniformsBindGroupLayout = renderer.device.createBindGroupLayout({
             label: "forward+ scene uniforms bind group layout",
@@ -61,9 +66,10 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                     renderer.materialBindGroupLayout
                 ]
             }),
+            // with the prepass, depth is already final: only the fragment with exactly that depth is shaded
             depthStencil: {
-                depthWriteEnabled: true,
-                depthCompare: "less",
+                depthWriteEnabled: !usePrepass,
+                depthCompare: usePrepass ? "equal" : "less",
                 format: "depth24plus"
             },
             vertex: {
@@ -81,6 +87,38 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                 targets: [ { format: renderer.canvasFormat } ]
             }
         });
+        if (usePrepass) {
+            this.prepassPipeline = renderer.device.createRenderPipeline({
+                label: "forward+ depth prepass pipeline",
+                layout: renderer.device.createPipelineLayout({
+                    label: "forward+ depth prepass pipeline layout",
+                    bindGroupLayouts: [
+                        this.sceneUniformsBindGroupLayout,
+                        renderer.modelBindGroupLayout,
+                        renderer.materialBindGroupLayout
+                    ]
+                }),
+                depthStencil: {
+                    depthWriteEnabled: true,
+                    depthCompare: "less",
+                    format: "depth24plus"
+                },
+                vertex: {
+                    module: renderer.device.createShaderModule({
+                        label: "depth prepass vert shader",
+                        code: shaders.naiveVertSrc
+                    }),
+                    buffers: [ renderer.vertexBufferLayout ]
+                },
+                fragment: {
+                    module: renderer.device.createShaderModule({
+                        label: "depth prepass frag shader",
+                        code: shaders.depthPrepassFragSrc
+                    }),
+                    targets: []
+                }
+            });
+        }
     }
 
     override draw() {
@@ -88,6 +126,32 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         const canvasTextureView = renderer.context.getCurrentTexture().createView();
 
         this.lights.doLightClustering(encoder);
+
+        if (this.usePrepass) {
+            // depth-only pass: fills the depth buffer with the closest surface per pixel
+            const prepass = encoder.beginRenderPass({
+                label: "forward+ depth prepass",
+                colorAttachments: [],
+                depthStencilAttachment: {
+                    view: this.depthTextureView,
+                    depthClearValue: 1.0,
+                    depthLoadOp: "clear",
+                    depthStoreOp: "store"
+                }
+            });
+            prepass.setPipeline(this.prepassPipeline!);
+            prepass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
+            this.scene.iterate(node => {
+                prepass.setBindGroup(shaders.constants.bindGroup_model, node.modelBindGroup);
+            }, material => {
+                prepass.setBindGroup(shaders.constants.bindGroup_material, material.materialBindGroup);
+            }, primitive => {
+                prepass.setVertexBuffer(0, primitive.vertexBuffer);
+                prepass.setIndexBuffer(primitive.indexBuffer, 'uint32');
+                prepass.drawIndexed(primitive.numIndices);
+            });
+            prepass.end();
+        }
 
         const renderPass = encoder.beginRenderPass({
             label: "forward+ render pass",
@@ -102,7 +166,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
             depthStencilAttachment: {
                 view: this.depthTextureView,
                 depthClearValue: 1.0,
-                depthLoadOp: "clear",
+                depthLoadOp: this.usePrepass ? "load" : "clear", // keep the prepass depth
                 depthStoreOp: "store"
             }
         });
